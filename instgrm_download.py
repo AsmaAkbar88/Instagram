@@ -1,36 +1,47 @@
 import streamlit as st
-import requests
+import instaloader
 import re
 import uuid
+import os
+import shutil
 
-# Streamlit UI
-st.title("Instagram Video Downloader ⏳")
-url = st.text_input("Enter Instagram Video URL: ")
+st.title("📥 Instagram Video Downloader")
 
-# Function to sanitize the URL and make it a valid file name
+url = st.text_input("Paste Instagram Post/Reel URL:")
+
 def sanitize_filename(url):
-    # Remove unwanted characters and make the file name valid
-    return re.sub(r'[^\w\s-]', '', url.split('/')[-1]) + f"_{uuid.uuid4().hex}.mp4"
+    return re.sub(r'[^\w\s-]', '', url.split('/')[-2]) + f"_{uuid.uuid4().hex}.mp4"
 
-# Function to download video
-def download_video(url):
+def download_video_only(url):
     try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            filename = sanitize_filename(url)
-            with open(filename, "wb") as f:
-                f.write(response.content)
-            return f"Download Successful! Video saved as {filename}"
-        else:
-            return "Failed to Download"
+        temp_folder = "temp_video"
+        os.makedirs(temp_folder, exist_ok=True)
+
+        L = instaloader.Instaloader(dirname_pattern=temp_folder, download_video_thumbnails=False,
+                                    download_geotags=False, download_comments=False, save_metadata=False)
+
+        shortcode = url.split("/")[-2]
+        post = instaloader.Post.from_shortcode(L.context, shortcode)
+
+        L.download_post(post, target="video_temp")
+
+        for file in os.listdir(temp_folder):
+            if file.endswith(".mp4"):
+                new_name = sanitize_filename(url)
+                shutil.move(os.path.join(temp_folder, file), new_name)
+                shutil.rmtree(temp_folder)
+                return "✅ Download Successful!"
+        
+        shutil.rmtree(temp_folder)
+        return "❌ Video not found."
+
     except Exception as e:
-        return f"Error: {e}"
+        return f"❌ Error: {e}"
 
 if st.button("Download") and url:
-    message = download_video(url)
-    if "Successful" in message:
+    message = download_video_only(url)
+    if "✅" in message:
         st.success(message)
     else:
         st.error(message)
-else:
-    st.error("Please enter a valid URL.")
+
